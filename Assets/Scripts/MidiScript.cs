@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using System.Reflection;
+using Minis;
 
 public class MidiScript : MonoBehaviour
 {
@@ -10,48 +12,54 @@ public class MidiScript : MonoBehaviour
     int keyOffset = 21;
 
     [SerializeField] GameObject barManager;
-
+    MidiDevice midiDevice;
     // Start is called before the first frame update
     void Start()
     {
-        InputSystem.onDeviceChange += (device, change) =>
-        {
-            if (change != InputDeviceChange.Added) return;
-            var midiDevice = device as Minis.MidiDevice;
-            if (midiDevice == null) return;
-
-            midiDevice.onWillNoteOn += (note, velocity) => {
-                Debug.Log(string.Format(
-                    "Note On #{0} ({1}) vel:{2:0.00} ch:{3} dev:'{4}'",
-                    note.noteNumber,
-                    note.noteNumber.GetType(),
-                    note.shortDisplayName,
-                    velocity,
-                    velocity.GetType(),
-                    (note.device as Minis.MidiDevice)?.channel,
-                    note.device.description.product
-                ));
-
-                barManager.GetComponent<BarScript>().onNoteOn(note.noteNumber - keyOffset, velocity);
-            };
-            
-            midiDevice.onWillNoteOff += (note) => {
-                Debug.Log(string.Format(
-                    "Note Off #{0} ({1}) ch:{2} dev:'{3}'",
-                    note.noteNumber,
-                    note.shortDisplayName,
-                    (note.device as Minis.MidiDevice)?.channel,
-                    note.device.description.product
-                ));
-
-                barManager.GetComponent<BarScript>().onNoteOff(note.noteNumber - keyOffset);
-            };
-        };
+        InputSystem.onDeviceChange += MidiDeviceSettingUp;
     }
 
-    // Update is called once per frame
-    void Update()
+    void MidiDeviceSettingUp (InputDevice device, InputDeviceChange change) 
     {
-        
+        if (change != InputDeviceChange.Added) return;
+        midiDevice = device as MidiDevice;
+        if (midiDevice == null) return;
+
+        midiDevice.onWillNoteOn += onNoteOn;
+        midiDevice.onWillNoteOff += onNoteOff;
+    }
+
+    void onNoteOn (MidiNoteControl note, float velocity) {
+        Debug.Log(string.Format(
+            "Note On #{0} ({1}) vel:{2:0.00} ch:{3} dev:'{4}'",
+            note.noteNumber,
+            note.noteNumber.GetType(),
+            note.shortDisplayName,
+            velocity,
+            velocity.GetType(),
+            (note.device as MidiDevice)?.channel,
+            note.device.description.product
+        ));
+
+        barManager.GetComponent<BarScript>().onNoteOn(note.noteNumber - keyOffset, velocity);
+    }
+
+    void onNoteOff (MidiNoteControl note) {
+        Debug.Log(string.Format(
+            "Note Off #{0} ({1}) ch:{2} dev:'{3}'",
+            note.noteNumber,
+            note.shortDisplayName,
+            (note.device as MidiDevice)?.channel,
+            note.device.description.product
+        ));
+
+        barManager.GetComponent<BarScript>().onNoteOff(note.noteNumber - keyOffset);
+    }
+
+    void OnApplicationQuit() {
+        InputSystem.onDeviceChange -= MidiDeviceSettingUp;
+        if (midiDevice == null) return;
+        midiDevice.onWillNoteOn -= onNoteOn;
+        midiDevice.onWillNoteOff -= onNoteOff;
     }
 }

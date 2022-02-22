@@ -1,196 +1,77 @@
 # About this
-This is the program set and text instruction for [my tutorial video](https://youtu.be/3PRifmlwi0I)
+This is the program set and text instruction for [my tutorial video]()
 
-## Step1 Handling Midi Event
-- Create a new 3D Unity project. I use Unity 2019.4.16f1 on Ubuntu 20.04
-- After Unity launched, Open "Packages/manifest.json" by any text editor.
-- Add "scopedRegistries" section(you can copy from  the description) below "dependancies" section.
-
-```json
-"scopedRegistries": [
-  {
-    "name": "Keijiro",
-    "url": "https://registry.npmjs.com",
-    "scopes": [
-      "jp.keijiro"
-    ]
-  }
-]
-```
-- Save "manifest.json" and back to Unity. Package Manager will automatically launch, then, Project Setting will appear.
-- Open "Package Manager" from "Window".
-- Switch to "My Registry" and search "Minis"
-- Install Minis (NOT BoltMinis!!)
-- After installation finished, restart Unity(maybe automatically restart)
-- After Unity has restarted...
-- Create "Scripts" Folder in "Assets".
-- Create "MidiScript.cs" in "Assets/Scripts" and open it.
+## Step3 Handling Camera Input
+- Change Edit/Project Settings/Player/Active Input Handling to "Both".
+- Unity may restart.
+- After Unity has restarted, create "CameraControl.cs" in "Assets/Scripts" and oepn it.
 - Edit it.
-
 ```cs
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.InputSystem;
+using UnityEngine.UI;
 
-public class MidiScript : MonoBehaviour
+public class CameraControl : MonoBehaviour
 {
-    // Start is called before the first frame update
+    [SerializeField] private RawImage rawImage;
+    [SerializeField] private Dropdown dropDown;
+
+    WebCamTexture webCamTexture;
+    WebCamDevice[] webCamDevices;
+
     void Start()
     {
-        InputSystem.onDeviceChange += (device, change) =>
-        {
-            if (change != InputDeviceChange.Added) return;
-            var midiDevice = device as Minis.MidiDevice;
-            if (midiDevice == null) return;
-
-            midiDevice.onWillNoteOn += (note, velocity) => {
-                Debug.Log(string.Format(
-                    "Note On #{0} ({1}) vel:{2:0.00} ch:{3} dev:'{4}'",
-                    note.noteNumber,
-                    note.noteNumber.GetType(),
-                    note.shortDisplayName,
-                    velocity,
-                    velocity.GetType(),
-                    (note.device as Minis.MidiDevice)?.channel,
-                    note.device.description.product
-                ));
-            };
-            
-            midiDevice.onWillNoteOff += (note) => {
-                Debug.Log(string.Format(
-                    "Note Off #{0} ({1}) ch:{2} dev:'{3}'",
-                    note.noteNumber,
-                    note.shortDisplayName,
-                    (note.device as Minis.MidiDevice)?.channel,
-                    note.device.description.product
-                ));
-            };
-        };
+        string name;
+        this.webCamDevices = WebCamTexture.devices;
+        for (int i = 0; i < this.webCamDevices.Length; i++){
+            name = this.webCamDevices[i].name.ToString();
+            dropDown.options.Add(new Dropdown.OptionData { text = name });
+        }
     }
 
-    // Update is called once per frame
-    void Update()
-    {
-        
+    public void onDeviceChanged () {
+        if (webCamTexture != null){
+            webCamTexture.Stop();
+        }
+        webCamTexture = new WebCamTexture(webCamDevices[dropDown.value].name, 1280, 720, 30);
+        rawImage.texture = webCamTexture;
+
+        // apply video aspect to rawImage
+        float rate = (float)rawImage.texture.width / rawImage.texture.height;
+        float imageHeight = rawImage.rectTransform.sizeDelta.y;
+        rawImage.rectTransform.sizeDelta = new Vector2(imageHeight * rate, imageHeight);
+
+        webCamTexture.Play();
     }
 }
 ```
+- Set the aspect setting in Game tab to 16:9.
+- Create Canvas.
+- Change canvas settings.
+    - Rander Mode: Screen Space - Camera
+    - Rander Camera: Main Camera (setting by attaching)
+    - Layer: Default
+- Create RawImage "CameraImage" as a Canvas' child.
+- Change Anchors in Rect Transform to 
+    - Min: 0, 0
+    - Max: 1, 1
+- Create Dropdown "CameraSelector" as a Canvas' child and delete its all options.
+- Create EmptyObject "Managers" and move "MidiManager" and "BarManager" to its children.
+- Create EmptyObject "CameraManager" as a Managers's child.
+- Attach "CameraControl.cs" to "CameraManager".
+- Attach "CameraImage" and "CameraSelector" to "CameraControl.cs" in "CameraManager".
+- Resister CameraManager's function "CameraControl.onDeviceChanged" to "On Value Changed" in "CameraSelector" 
 
-- This program sets consol outputs as Midi event handler.
-- Create Empty Object "MidiManager" and attach MidiScript.cs to this.
-- Connect Midi device, press "Play " and show the console.
-- Midi event information will be displayed when you hit or release Midi keyboard.
-
-
-## Step2 Visualize notes
-
-- Create "BarScript.cs" in "Assets/Scripts" and oepn it.
-- Edit it.
-
-```cs
-using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
-
-public class BarScript : MonoBehaviour
-{
-    const int keysCount = 88;
-    [SerializeField] GameObject barManager;
-    GameObject[] barsPressed = new GameObject[keysCount]; // bars linked to the pressed key
-    [SerializeField] List<GameObject> barsReleased = new List<GameObject>(); // bars linked to the released key
-
-    bool[] isKeyPressed = new bool[keysCount];
-
-    float barSpeed = (float)0.05;
-    float upperPositionLimit = (float)100;
-
-    // Start is called before the first frame update
-    void Start()
-    {
-        for (int i = 0; i < 88; i++){
-            // initialize: keys are not pressed
-            isKeyPressed[i] = false;
-            barsPressed[i] = null;
-        }
-    }
-
-    // Update is called once per frame
-    void Update()
-    {
-        // currently pressed keys
-        for (int i = 0; i < 88; i++){
-            if (isKeyPressed[i] && barsPressed[i] != null) {
-                Vector3 scale = barsPressed[i].transform.localScale;
-                scale.y += barSpeed * 2;
-                barsPressed[i].transform.localScale = scale;
-                Vector3 pos = barsPressed[i].transform.position;
-                pos.y += barSpeed;
-                barsPressed[i].transform.position = pos;
-            }
-        }
-
-        // released keys
-        for(int i = barsReleased.Count - 1; i >= 0; i--){
-            Vector3 pos = barsReleased[i].transform.position;
-
-            // destroy bars when it reached upperPositionLimit
-            if (pos.y > upperPositionLimit){
-                Destroy(barsReleased[i]);
-                barsReleased.RemoveAt(i);
-            } else {
-                pos.y += barSpeed * 2;
-                barsReleased[i].transform.position = pos;
-            }
-        }
-    }
-
-    public void onNoteOn(int noteNumber, float velocity)
-    {
-        // clearfy that the key is pressed
-        isKeyPressed[noteNumber] = true;
-
-        // craete bar object
-        GameObject barPrefab;
-        barPrefab = (GameObject)Resources.Load("Prefab/Bar");
-        barsPressed[noteNumber] = Instantiate(barPrefab);
-        barsPressed[noteNumber].transform.position = new Vector3(noteNumber, 0, 0);
-        barsPressed[noteNumber].transform.SetParent(barManager.transform, true);
-    }
-
-    public void onNoteOff(int noteNumber)
-    {
-        barsReleased.Add(Clone(barsPressed[noteNumber]));
-        DestroyImmediate(barsPressed[noteNumber]);
-
-        isKeyPressed[noteNumber] = false;
-    }
-
-    GameObject Clone( GameObject obj )
-    // reference: https://develop.hateblo.jp/entry/2018/06/30/142319
-    {
-        var clone = GameObject.Instantiate( obj ) as GameObject;
-        clone.transform.parent = obj.transform.parent;
-        clone.transform.localPosition = obj.transform.localPosition;
-        clone.transform.localScale = obj.transform.localScale;
-        return clone;
-    }
-}
-```
-
-- Change "keysCount" value according to your Midi keyboard.
-- Create Empty Object "BarManager" and attach BarScript.cs to this.
-- In "BarManager" inspector, attach it to "Bar Manager" in "Bar Script(Script)"
-- Create Cube Object "Bar" and change its scale Y to 0.1.
-- Create "Resources" Folder in "Assets" and create "Prefab" Folder in "Assets/Resources"
-- Drag & Drop "Bar" into "Prefab" and delete "Bar" from Scene.
+# Step4 Termination Processing
 - Open "MidiScript.cs" and edit it.
-
 ```cs
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using System.Reflection;
+using Minis;
 
 public class MidiScript : MonoBehaviour
 {
@@ -199,54 +80,59 @@ public class MidiScript : MonoBehaviour
     int keyOffset = 21;
 
     [SerializeField] GameObject barManager;
-
+    MidiDevice midiDevice;
     // Start is called before the first frame update
     void Start()
     {
-        InputSystem.onDeviceChange += (device, change) =>
-        {
-            if (change != InputDeviceChange.Added) return;
-            var midiDevice = device as Minis.MidiDevice;
-            if (midiDevice == null) return;
-
-            midiDevice.onWillNoteOn += (note, velocity) => {
-                Debug.Log(string.Format(
-                    "Note On #{0} ({1}) vel:{2:0.00} ch:{3} dev:'{4}'",
-                    note.noteNumber,
-                    note.noteNumber.GetType(),
-                    note.shortDisplayName,
-                    velocity,
-                    velocity.GetType(),
-                    (note.device as Minis.MidiDevice)?.channel,
-                    note.device.description.product
-                ));
-
-                barManager.GetComponent<BarScript>().onNoteOn(note.noteNumber - keyOffset, velocity);
-            };
-            
-            midiDevice.onWillNoteOff += (note) => {
-                Debug.Log(string.Format(
-                    "Note Off #{0} ({1}) ch:{2} dev:'{3}'",
-                    note.noteNumber,
-                    note.shortDisplayName,
-                    (note.device as Minis.MidiDevice)?.channel,
-                    note.device.description.product
-                ));
-
-                barManager.GetComponent<BarScript>().onNoteOff(note.noteNumber - keyOffset);
-            };
-        };
+        InputSystem.onDeviceChange += MidiDeviceSettingUp;
     }
 
-    // Update is called once per frame
-    void Update()
+    void MidiDeviceSettingUp (InputDevice device, InputDeviceChange change) 
     {
-        
+        if (change != InputDeviceChange.Added) return;
+        midiDevice = device as MidiDevice;
+        if (midiDevice == null) return;
+
+        midiDevice.onWillNoteOn += onNoteOn;
+        midiDevice.onWillNoteOff += onNoteOff;
+    }
+
+    void onNoteOn (MidiNoteControl note, float velocity) {
+        Debug.Log(string.Format(
+            "Note On #{0} ({1}) vel:{2:0.00} ch:{3} dev:'{4}'",
+            note.noteNumber,
+            note.noteNumber.GetType(),
+            note.shortDisplayName,
+            velocity,
+            velocity.GetType(),
+            (note.device as MidiDevice)?.channel,
+            note.device.description.product
+        ));
+
+        barManager.GetComponent<BarScript>().onNoteOn(note.noteNumber - keyOffset, velocity);
+    }
+
+    void onNoteOff (MidiNoteControl note) {
+        Debug.Log(string.Format(
+            "Note Off #{0} ({1}) ch:{2} dev:'{3}'",
+            note.noteNumber,
+            note.shortDisplayName,
+            (note.device as MidiDevice)?.channel,
+            note.device.description.product
+        ));
+
+        barManager.GetComponent<BarScript>().onNoteOff(note.noteNumber - keyOffset);
+    }
+
+    void OnApplicationQuit() {
+        InputSystem.onDeviceChange -= MidiDeviceSettingUp;
+        if (midiDevice == null) return;
+        midiDevice.onWillNoteOn -= onNoteOn;
+        midiDevice.onWillNoteOff -= onNoteOff;
     }
 }
 ```
+- If you changed "keyOffset" value in #1, reflect it again.
 
-- Change "keyOffset" value according to your Midi keyboard. This value is Midi note number of the lowest key of your device. (e.g. A0 is 21)
-- Open MidiManager's inspector and attach "BarManager" object
-to "Bar Manager" in "Midi Script(Script)"
-- Now, it's complete. Play Unity and hit Midi keyboard.
+# In Play mode
+- In Play mdoe, select your video device and adjust main Camera's Position and Rotation.

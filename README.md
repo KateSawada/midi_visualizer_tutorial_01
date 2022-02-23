@@ -1,5 +1,5 @@
 # About this
-This is the program set and text instruction for [my tutorial video]()
+This is the program set and text instruction for [my tutorial video](https://youtu.be/jE6XiUI-a5Q)
 
 ## Step3 Handling Camera Input
 - Change Edit/Project Settings/Player/Active Input Handling to "Both".
